@@ -133,7 +133,7 @@
 
 					shader.source = source;
 
-					if (source) sshader.compile();
+					if (source) shader.compile();
 					
 					return shader;
 				},
@@ -198,6 +198,80 @@
 			} else {
 				_static.listeners[event] = [];
 			}
+		},
+		defineObjects: function(args) {
+			if (!(typeof args === 'object' && typeof args.definitions === 'object')) return;
+
+			var result = typeof args.prototypes === 'obejct' ? args.prototypes : {},
+				definitions = args.definitions,
+				sortedDefinitionNames = [],
+				// looping vars
+				prototype,
+				prototypeName,
+				definition,
+				definitionName,
+				definitionIndex,
+				subclassName,
+				i,
+				l;
+
+			// sort definitions in order of inheritance dependency
+
+			for (definitionName in definitions) {
+				definition = definitions[definitionName];
+				definitionIndex = sortedDefinitionNames.indexOf(definitionName);
+
+				if (definitionIndex === -1) {
+					definitionIndex = result.length;
+					sortedDefinitionNames.push(definitionName);
+				}
+
+				subclassName = definition._subclass;
+
+				if (typeof subclassName === 'string' && result.indexof(subclassName) === -1) {
+					result.splice(definitionIndex, 0, subclassName);
+				}
+			}
+
+			// now define the listed properties for each prototype
+
+			l = sortedDefinitionNames.length;
+
+			for (i = 0; i < l; ++i) {
+				prototypeName = sortedDefinitionNames[i];
+				prototype = result[prototypeName] || (result[prototypeName] = {});
+				definition = definitions[prototypeName];
+
+				if (!definition) continue;
+
+				if (typeof definition._superclass === 'string' && typeof definitions[definition._superclass] === 'object') {
+					defineProperties(prototype, definitions[definition._superclass], prototypeName);
+				}
+
+				defineProperties(prototype, definition);
+			}
+
+			function defineProperties(prototype, definition, subclass) {
+				var propertyName,
+					property,
+					subclassDefinition = subclass && definitions[subclass];
+
+				for (propertyName in definition) {
+					if (propertyName === '_superclass') continue;
+
+					property = definition[propertyName];
+
+					if (subclassDefinition) {
+						// this is a superclass, add properties to subclass that it doesn't override
+						subclassDefinition[propertyName] = subclassDefinition[propertyName] || property;
+					} else {
+						// this is a subclass, define the property
+						Object.defineProperty(prototype, propertyName, property);
+					}
+				}
+			}
+
+			return result;
 		},
 
 		// event codes

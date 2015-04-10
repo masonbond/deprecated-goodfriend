@@ -286,46 +286,14 @@
 					set: function(n) { return this[15] = n; }
 				}
 			},
-		},
-
-		// looping indices
-		prototypeName,
-		prototype,
-		definition;
+		};
 
 	// assemble prototypes
 
-	for (prototypeName in definitions) {
-		prototype = prototypes[prototypeName] || (prototypes[prototypeName] = {});
-		definition = definitions[prototypeName];
-
-		if (typeof definition._superclass === 'string' && typeof definitions[definition._superclass] === 'object') {
-			// compose properties from defined superclass
-			defineProperties(prototype, definitions[definition._superclass], prototypeName);
-		}
-
-		defineProperties(prototype, definition);
-	}
-
-	function defineProperties(prototype, definition, subclass) {
-		var propertyName,
-			property,
-			subclassDefinition = subclass && definitions[subclass];
-
-		for (propertyName in definition) {
-			if (propertyName === '_superclass') continue;
-
-			property = definition[propertyName];
-
-			if (subclassDefinition) {
-				// this is a superclass, add properties to subclass that it doesn't override
-				subclassDefinition[propertyName] = subclassDefinition[propertyName] || property;
-			} else {
-				// this is a subclass, define the property
-				Object.defineProperty(prototype, propertyName, property);
-			}
-		}	
-	}
+	prototypes = GF.defineObjects({
+		prototypes: prototypes,
+		definitions: definitions
+	});
 
 	// create constructors
 
