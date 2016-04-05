@@ -81,7 +81,7 @@
 
 				Shader: function(source, type) {
 					// load a glsl shader.
-					// script parameter can be an HTMLScriptElement, the object of an HTMLScriptElement, or raw GLSL source.
+					// script parameter can be an HTMLScriptElement, the id of an HTMLScriptElement, or raw GLSL source.
 					var glsl,
 						shaderType,
 						object,
@@ -114,7 +114,7 @@
 							if (!glsl) return false;
 
 							// if necessary we can try to autodetect the shader type, but it's not optimal or future-proof
-							shaderType = shaderType || (/\bgl_Position/.test(glsl) ? gl.VERTEX_SHADER : gl.FRAGMENT_SHADER);
+							shaderType = shaderType || (/\bgl_Position\b/.test(glsl) ? gl.VERTEX_SHADER : gl.FRAGMENT_SHADER);
 							
 							object = gl.createShader(shaderType);
 
@@ -202,7 +202,7 @@
 		defineObjects: function(args) {
 			if (!(typeof args === 'object' && typeof args.definitions === 'object')) return;
 
-			var result = typeof args.prototypes === 'obejct' ? args.prototypes : {},
+			var result = typeof args.prototypes === 'object' ? args.prototypes : {},
 				definitions = args.definitions,
 				sortedDefinitionNames = [],
 				// looping vars

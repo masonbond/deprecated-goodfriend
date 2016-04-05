@@ -11,36 +11,39 @@ body {
 	background: #222;
 	color: #ddd;
 }
+
+canvas {
+	background: #000;
+}
+
 </style>
 <script src="../src/gf.core.js"></script>
 <script src="../src/gf.vector.js"></script>
+<script src="../src/gf.matrixstack.js"></script>
 <script type="x-shader/x-vertex" id="test-vertex">
 attribute vec4 in_position;
 
 void main() {
-    gl_Position = in_position;
+	gl_Position = in_position;
 }
 </script>
 <script type="x-shader/x-fragment" id="test-fragment">
 void main() {
-    gl_FragColor = vec4(1.0, 0, 0, 1.0);
+	gl_FragColor = vec4(1.0, 0, 0, 1.0);
 }
 </script>
 </head>
-<body>poostix
-<canvas id="view-canvas" width="640" height="360"></canvas>
+<body>
+<canvas id="view-canvas" width="960" height="540"></canvas>
 <script>
 
-var gf = GF.Context(document.getElementById('view-canvas')),
-	vertShader = new gf.Shader('test-vertex'),
-	fragShader = new gf.Shader('test-fragment');
+var gf = new GF.Context(document.getElementById('view-canvas'));
 
 
 gf.shaderProgram = new gf.ShaderProgram(
 	new gf.Shader('test-vertex'),
 	new gf.Shader('test-fragment')
 );
-
 
 console.log(gf.shaderProgram.vertexShader.source);
 
