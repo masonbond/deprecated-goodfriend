@@ -726,10 +726,9 @@
 			var cos = Math.cos(a),
 				sin = Math.sin(a);
 
-			operand[0] = cos;
+			operand[0] = operand[10] = cos;
 			operand[2] = sin;
 			operand[8] = -sin;
-			operand[10] = cos;
 
 			gfMultiplyMat4(top, operand, top);
 
@@ -743,7 +742,7 @@
 
 			operand[0] = operand[5] = cos;
 			operand[1] = -sin;
-			operant[4] = sin;
+			operand[4] = sin;
 
 			gfMultiplyMat4(top, operand, top);
 
