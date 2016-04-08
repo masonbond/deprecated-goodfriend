@@ -19,7 +19,6 @@ canvas {
 </style>
 <script src="../src/gf.core.js"></script>
 <script src="../src/gf.vector.js"></script>
-<script src="../src/gf.matrixstack.js"></script>
 <script type="x-shader/x-vertex" id="test-vertex">
 attribute vec4 in_position;
 
@@ -38,7 +37,6 @@ void main() {
 <script>
 
 var gf = new GF.Context(document.getElementById('view-canvas'));
-
 
 gf.shaderProgram = new gf.ShaderProgram(
 	new gf.Shader('test-vertex'),
