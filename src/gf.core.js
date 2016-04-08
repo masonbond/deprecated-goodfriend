@@ -6,7 +6,15 @@
 			listeners: {}
 		},
 		gl,
-		shaderTypeMap;
+		shaderTypeMap,
+		defaults = {
+			Texture: {
+				minFilter: 'LINEAR',
+				magFilter: 'LINEAR_MIPMAP_NEAREST',
+				wrapU: 'CLAMP_TO_EDGE',
+				wrapV: 'CLAMP_TO_EDGE'
+			}
+		};
 
 	// TODO finish refactor
 	// -	fix ur object literal initializer getter/setters
@@ -32,17 +40,46 @@
 
 	_public = {
 
-		// helper constructors
+		// helpers
 
-		Stack: function(args) {
-			// TODO Stack
+		extend: function() {
+			var deepCopy = arguments[0] === true,
+				temp = {},
+				source,
+				dest,
+				prop,
+				l = deepCopy - 1,
+				last = l + 1;
+				i;
+
+			for (i = arguments.length - 1; i > l; --i) {
+				source = arguments[i];
+
+				if (typeof source !== 'object') return false;
+
+				dest = i === last ? source : temp;
+
+				for (prop in source) {
+					if (deepCopy === true && typeof dest[prop] === 'object') {
+						_public.extend(true, dest[prop], source[prop]);
+					} else {
+						target[prop] = Object.prototype.hasOwnProperty.call(temp, prop) ? dest[prop] : source[prop];
+					}
+				}
+			}
+
+			return true;
 		},
 		
 		// graphics constructors
 
 		Context: function(canvas) {
-			var gl = canvas && canvas.getContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')),
-				shaderProgram = 0,
+			var gl = canvas && canvas.getContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+			
+			// TODO log context creation failed
+			if (!gl) return false;
+
+			var shaderProgram = 0,
 				context,
 				id = _static.nextContextId++,
 				active = {
@@ -50,9 +87,6 @@
 					vertexShader: 0,
 					fragmentShader: 0
 				};
-
-			// TODO log context creation failed
-			if (!gl) return false;
 
 			// map out shader types to enumerated webgl types, but only once
 			shaderTypeMap = shaderTypeMap || {
@@ -62,7 +96,7 @@
 
 			raiseEvent(_public.INIT);
 
-			return context = {
+			context = {
 				get id() { return id; },
 				get gl() { return gl; },
 
@@ -175,8 +209,90 @@
 					if (vertexShader && fragmentShader) program.link();
 
 					return program;
+				},
+				Texture: function(textureSource, options) {
+					var settings = {},
+						id = gl.createTexture(),
+						texture,
+						width,
+						height;
+
+					_public.extend(settings, options, defaults.Texture);
+
+					function fromElement(element, isImage) {
+						bind();
+						gl.texImage2d(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, element);
+
+						// images will have naturalWidth and Height defined
+
+						width = element.naturalWidth || element.width;
+						height = element.naturalHeight || element.height;
+					}
+
+					function load(source) {
+						// source can be a url to an image, an image element, a canvas element, or the id of an image or canvas element
+
+						source = typeof source === 'string' && document.getElementById(source) || source;
+
+						var isImage;
+
+						if (typeof source === 'string') {
+							var image = new Image();
+
+							image.onload = function() { fromElement(image); };
+							image.src = source;
+						} else if ((isImage = source instanceof HTMLImageElement) || source instanceof HTMLCanvasElement) {
+							fromElement(source, isImage);
+						} else throw new TypeError('GF.Texture - invalid source type');						
+					}
+
+					function bind(unit) {
+						gl.activeTexture(gl['TEXTURE' + (unit || '0')]);
+						gl.bindTexture(gl.TEXTURE_2D, id);
+					}
+
+					function wrap(u, v) {
+						bind();
+
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl[u]);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl[v || u]);
+
+						context.Texture.unbind();
+					}
+
+					function filter(min, mag) {
+						bind();
+						
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl[min]);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl[mag || min]);
+						gl.generateMipmap(gl.TEXTURE_2D);
+						
+						context.Texture.unbind();
+					}
+
+					load(textureSource);
+					wrap(settings.wrapU, settings.wrapV);
+					filter(settings.minFilter, settings.magFilter);
+
+					return texture = {
+						get id() { return id; },
+						get width() { return width; },
+						get height() { return height; },
+						load: load,
+						bind: bind,
+						wrap: wrap,
+						filter: filter
+					};
 				}
 			};
+
+			// static methods
+
+			context.Texture.unbind = function() {
+				gl.bindTexture(gl.TEXTURE_2D, null);
+			};
+
+			return context;
 		},
 
 		// methods
@@ -187,7 +303,7 @@
 		removeEventListener: function(event, callback) {
 			// remove a GF event listener with a specific callback.
 			// if callback is omitted or falsy, remove all listeners for that event
-			var listeners =  _static.listeners[event],
+			var listeners = _static.listeners[event],
 				i;
 
 			if (!listeners) return false;

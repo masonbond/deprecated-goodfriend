@@ -920,6 +920,6 @@
 			createPerspectiveFromFOV: createPerspectiveFromFOV,
 			createPerspectiveFromBounds: createPerspectiveFromBounds
 		};
-	}
+	};
 
 }(window.GF));
