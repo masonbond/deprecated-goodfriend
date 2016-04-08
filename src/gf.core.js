@@ -9,8 +9,8 @@
 		shaderTypeMap,
 		defaults = {
 			Texture: {
-				minFilter: 'LINEAR',
-				magFilter: 'LINEAR_MIPMAP_NEAREST',
+				minFilter: 'LINEAR_MIPMAP_LINEAR',
+				magFilter: 'LINEAR',
 				wrapU: 'CLAMP_TO_EDGE',
 				wrapV: 'CLAMP_TO_EDGE'
 			}
@@ -48,25 +48,32 @@
 				source,
 				dest,
 				prop,
-				l = deepCopy - 1,
-				last = l + 1;
+				end = deepCopy - 1,
+				last = end + 1,
 				i;
 
-			for (i = arguments.length - 1; i > l; --i) {
+			for (i = arguments.length - 1; i > end; --i) {
 				source = arguments[i];
 
 				if (typeof source !== 'object') return false;
 
-				dest = i === last ? source : temp;
+				dest = temp;
+
+				if (i === last) {
+					dest = source;
+					source = temp;
+				}
 
 				for (prop in source) {
-					if (deepCopy === true && typeof dest[prop] === 'object') {
+					if (deepCopy && typeof source[prop] === 'object' && typeof dest[prop] === 'object') {
 						_public.extend(true, dest[prop], source[prop]);
 					} else {
-						target[prop] = Object.prototype.hasOwnProperty.call(temp, prop) ? dest[prop] : source[prop];
+						dest[prop] = Object.prototype.hasOwnProperty.call(dest, prop) ? dest[prop] : source[prop];						
 					}
 				}
 			}
+
+			console.log(source);
 
 			return true;
 		},
@@ -217,11 +224,12 @@
 						width,
 						height;
 
-					_public.extend(settings, options, defaults.Texture);
+					_public.extend(settings, options || {}, defaults.Texture);
 
 					function fromElement(element, isImage) {
 						bind();
-						gl.texImage2d(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, element);
+						gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, element);
+						gl.generateMipmap(gl.TEXTURE_2D);
 
 						// images will have naturalWidth and Height defined
 
@@ -265,14 +273,11 @@
 						
 						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl[min]);
 						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl[mag || min]);
-						gl.generateMipmap(gl.TEXTURE_2D);
 						
 						context.Texture.unbind();
 					}
-
+					console.log(settings);
 					load(textureSource);
-					wrap(settings.wrapU, settings.wrapV);
-					filter(settings.minFilter, settings.magFilter);
 
 					return texture = {
 						get id() { return id; },

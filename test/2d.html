@@ -36,7 +36,8 @@ void main() {
 <canvas id="view-canvas" width="960" height="540"></canvas>
 <script>
 
-var gf = new GF.Context(document.getElementById('view-canvas'));
+var gf = new GF.Context(document.getElementById('view-canvas')),
+	texture = new gf.Texture('test.png');
 
 gf.shaderProgram = new gf.ShaderProgram(
 	new gf.Shader('test-vertex'),
