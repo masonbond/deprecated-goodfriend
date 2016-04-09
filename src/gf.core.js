@@ -5,7 +5,6 @@
 			contexts: [],
 			listeners: {}
 		},
-		gl,
 		shaderTypeMap,
 		defaults = {
 			Texture: {
@@ -22,25 +21,15 @@
 	// -	convert context to have getter/setter for active shaderprogram
 	// -	general cleanup pass
 
-	// helpers
-
-	function raiseEvent(type) {
-		var i,
-			listeners = _static.listeners[type],
-			l;
-
-		if (!(listeners && listeners.length > 0)) return false;
-
-		l = listeners.length;
-
-		for (i = 0; i < l; ++i) {
-			listeners[i]();
+	function loadModule(destination, modules) {
+		for (var name in modules) {
+			destination[name] = modules[name](destination);
 		}
 	}
 
 	_public = {
 
-		// helpers
+		// utility
 
 		extend: function() {
 			var deepCopy = arguments[0] === true,
@@ -73,11 +62,9 @@
 				}
 			}
 
-			console.log(source);
-
 			return true;
 		},
-		
+
 		// graphics constructors
 
 		Context: function(canvas) {
@@ -100,8 +87,6 @@
 				'x-shader/x-vertex': gl.VERTEX_SHADER,
 				'x-shader/x-fragment': gl.FRAGMENT_SHADER
 			};
-
-			raiseEvent(_public.INIT);
 
 			context = {
 				get id() { return id; },
@@ -235,6 +220,10 @@
 
 						width = element.naturalWidth || element.width;
 						height = element.naturalHeight || element.height;
+
+						if (typeof settings.onLoad === 'function') {
+							settings.onLoad(texture);
+						}
 					}
 
 					function load(source) {
@@ -276,7 +265,7 @@
 						
 						context.Texture.unbind();
 					}
-					console.log(settings);
+					
 					load(textureSource);
 
 					return texture = {
@@ -288,6 +277,13 @@
 						wrap: wrap,
 						filter: filter
 					};
+				},
+				BufferObject: function() {
+					var buffer;
+
+					return buffer = {
+
+					};
 				}
 			};
 
@@ -297,108 +293,15 @@
 				gl.bindTexture(gl.TEXTURE_2D, null);
 			};
 
+			loadModule(context, GF.Context.module);
+
 			return context;
-		},
-
-		// methods
-
-		addEventListener: function(event, callback, prepend) {
-			(_static.listeners[event] = _static.listeners[event] || [])[prepend ? 'unshift' : 'push'](callback);
-		},
-		removeEventListener: function(event, callback) {
-			// remove a GF event listener with a specific callback.
-			// if callback is omitted or falsy, remove all listeners for that event
-			var listeners = _static.listeners[event],
-				i;
-
-			if (!listeners) return false;
-
-			if (callback) {
-				i = listeners.indexOf(callback);
-				if (i !== -1) listeners.splice(i, 1);
-			} else {
-				_static.listeners[event] = [];
-			}
-		},
-		defineObjects: function(args) {
-			if (!(typeof args === 'object' && typeof args.definitions === 'object')) return;
-
-			var result = typeof args.prototypes === 'object' ? args.prototypes : {},
-				definitions = args.definitions,
-				sortedDefinitionNames = [],
-				// looping vars
-				prototype,
-				prototypeName,
-				definition,
-				definitionName,
-				definitionIndex,
-				subclassName,
-				i,
-				l;
-
-			// sort definitions in order of inheritance dependency
-
-			for (definitionName in definitions) {
-				definition = definitions[definitionName];
-				definitionIndex = sortedDefinitionNames.indexOf(definitionName);
-
-				if (definitionIndex === -1) {
-					definitionIndex = result.length;
-					sortedDefinitionNames.push(definitionName);
-				}
-
-				subclassName = definition._subclass;
-
-				if (typeof subclassName === 'string' && result.indexof(subclassName) === -1) {
-					result.splice(definitionIndex, 0, subclassName);
-				}
-			}
-
-			// now define the listed properties for each prototype
-
-			l = sortedDefinitionNames.length;
-
-			for (i = 0; i < l; ++i) {
-				prototypeName = sortedDefinitionNames[i];
-				prototype = result[prototypeName] || (result[prototypeName] = {});
-				definition = definitions[prototypeName];
-
-				if (!definition) continue;
-
-				if (typeof definition._superclass === 'string' && typeof definitions[definition._superclass] === 'object') {
-					defineProperties(prototype, definitions[definition._superclass], prototypeName);
-				}
-
-				defineProperties(prototype, definition);
-			}
-
-			function defineProperties(prototype, definition, subclass) {
-				var propertyName,
-					property,
-					subclassDefinition = subclass && definitions[subclass];
-
-				for (propertyName in definition) {
-					if (propertyName === '_superclass') continue;
-
-					property = definition[propertyName];
-
-					if (subclassDefinition) {
-						// this is a superclass, add properties to subclass that it doesn't override
-						subclassDefinition[propertyName] = subclassDefinition[propertyName] || property;
-					} else {
-						// this is a subclass, define the property
-						Object.defineProperty(prototype, propertyName, property);
-					}
-				}
-			}
-
-			return result;
-		},
-
-		// event codes
-
-		INIT: 'init'
+		}
 	};
+
+	// static members
+
+	_public.Context.module = {};
 
 	return _public;
 }());
