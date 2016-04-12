@@ -46,6 +46,19 @@ gf.shaderProgram = new gf.ShaderProgram(
 
 console.log(gf.shaderProgram.vertexShader.source);
 
+var vertexAttributes = [
+	{
+		name: 'in_position',
+		type: 'FLOAT',
+		size: 4
+	}
+];
+
+var mesh = new gf.Mesh({
+	attributes: vertexAttributes,
+	vertices:
+});
+
 </script>
 </body>
 </html>

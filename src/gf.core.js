@@ -12,14 +12,11 @@
 				magFilter: 'LINEAR',
 				wrapU: 'CLAMP_TO_EDGE',
 				wrapV: 'CLAMP_TO_EDGE'
+			},
+			Mesh: {
+				mode: 'TRIANGLES'
 			}
 		};
-
-	// TODO finish refactor
-	// -	fix ur object literal initializer getter/setters
-	// -	convert ShaderProgram to have getters/setters for vert/frag and link method, like Shader
-	// -	convert context to have getter/setter for active shaderprogram
-	// -	general cleanup pass
 
 	function loadModule(destination, modules) {
 		for (var name in modules) {
@@ -163,11 +160,13 @@
 					
 					return shader;
 				},
-				ShaderProgram: function(vertexShader, fragmentShader) {
+				ShaderProgram: function(options) {
 					// create a shader program.
-					var object = gl.createProgram(),
-						vert = vertexShader,
-						frag = fragmentShader,
+					var settings = {},
+						object = gl.createProgram(),
+						vert = options.vertexShader,
+						frag = options.fragmentShader,
+						attributes = options.attributes,
 						program;
 
 					program = {
@@ -179,11 +178,19 @@
 						get fragmentShader() { return frag; },
 						set fragmentShader(shader) { return frag = shader; },
 
+						get attributes() { return attributes; },
+						set attributes(newAttributes) { return attributes = newAttributes; },
+
 						link: function() {
 							if (!(vert && vert.object && frag && frag.object)) return false;
 
 							gl.attachShader(object, vert.object);
 							gl.attachShader(object, frag.object);
+
+							for (var i = 0, attr; attr = attributes[i]; ++i) {
+								gl.bindAttribLocation(object, i, attr.name);
+							}
+
 							gl.linkProgram(object);
 
 							if (!gl.getProgramParameter(object, gl.LINK_STATUS)) {
@@ -204,12 +211,14 @@
 				},
 				Texture: function(textureSource, options) {
 					var settings = {},
+						onLoad,
 						id = gl.createTexture(),
 						texture,
 						width,
 						height;
 
 					_public.extend(settings, options || {}, defaults.Texture);
+					onLoad = settings.onLoad;
 
 					function fromElement(element, isImage) {
 						bind();
@@ -221,8 +230,8 @@
 						width = element.naturalWidth || element.width;
 						height = element.naturalHeight || element.height;
 
-						if (typeof settings.onLoad === 'function') {
-							settings.onLoad(texture);
+						if (typeof onLoad === 'function') {
+							onLoad(texture);
 						}
 					}
 
@@ -240,7 +249,7 @@
 							image.src = source;
 						} else if ((isImage = source instanceof HTMLImageElement) || source instanceof HTMLCanvasElement) {
 							fromElement(source, isImage);
-						} else throw new TypeError('GF.Texture - invalid source type');						
+						} else throw new TypeError('GF.Context.Texture - invalid source type');						
 					}
 
 					function bind(unit) {
@@ -265,24 +274,97 @@
 						
 						context.Texture.unbind();
 					}
-					
+
 					load(textureSource);
 
 					return texture = {
 						get id() { return id; },
 						get width() { return width; },
 						get height() { return height; },
+						onLoad: onLoad,
 						load: load,
 						bind: bind,
 						wrap: wrap,
 						filter: filter
 					};
 				},
-				BufferObject: function() {
-					var buffer;
+				Mesh: function(options) {
+					var settings = {},
+						attributes = settings.attributes,
+						vertices = settings.vertices,
+						indices = settings.indices,
+						drawMode = gl[settings.mode],
+						i,
+						attr;
+
+					_public.extend(settings, defaults.Mesh, options)
+
+					// safety checks are optional but recommended, especially for procedurally generated geometry
+
+					if (!settings.unsafe) {
+						if (attributes.length > vertices.length) throw new Error('GF.Context.Mesh construction error: attributes require ' + attributes.length + ' buffers, ' + vertices.length + ' provided');
+
+						for (i = 0; attr = attributes[i]; ++i) {
+							if (vertices[i].length % attr.size !== 0) throw new RangeError('GF.Context.Mesh construction error: attribute "' + attr.name + '" requires ' + attr.size + ' vertex elements');
+							if (!((attr.type === gl.FLOAT && vertices[i] instanceof Float32Array) || (attr.type === gl.INT && vertices[i] instanceof Int32Array))) throw new TypeError('GF.Context.Mesh construction error: attribute "' + attr.name + '" type does not match type of buffer provided');
+						}
+					}
+
+					var id = gl.genVertexArrays(),
+						indicesId,
+						bufferIds = [];
+
+					// create vertex array id
+
+					gl.bindVertexArray(id);
+
+					// create and fill vertex buffers
+
+					for (i = 0; attr = attributes[i]; ++i) {
+						bufferIds[i] = gl.glGenBuffers();
+
+						gl.bindBuffer(gl.ARRAY_BUFFER, bufferIds[i]);
+						gl.bufferData(gl.ARRAY_BUFFER, vertices[i], gl.STATIC_DRAW);
+
+						gl.vertexAttribPointer(gl.ARRAY_BUFFER, attr.size, gl[attr.type], false, 0, 0);
+					}
+
+					// create and fill index buffer
+
+					indexId = gl.genBuffers();
+					gl.bindBuffer(gl.ARRAY_BUFFER, indexId);
+
+					gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexId);
+					gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+					// unbind
+
+					gl.bindVertexArray(0);
+					gl.bindBuffer(0);
+
+					function draw() {
+						gl.bindVertexArray(id);
+
+						var i, l = bufferIds.length;
+
+						for (i = 0; i < l; ++i) gl.enableVertexAttribArray(i);
+
+						gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexId);
+						gl.drawElements(drawMode, indices.length, gl.UNSIGNED_INT, 0);
+						gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+
+						for (i = 0; i < l; ++i) gl.disableVertexAttribArray(i);
+
+						gl.bindVertexArray(0);
+					}
 
 					return buffer = {
-
+						get attributes() { return attributes; },
+						get vertices() { return vertices; },
+						get indices() { return indices; },
+						get bufferIds() { return bufferIds; },
+						get id() { return id; },
+						draw: draw
 					};
 				}
 			};
@@ -291,6 +373,10 @@
 
 			context.Texture.unbind = function() {
 				gl.bindTexture(gl.TEXTURE_2D, null);
+			};
+
+			context.Mesh.unbind = function() {
+				gl.bindVertexArray(0);
 			};
 
 			loadModule(context, GF.Context.module);
