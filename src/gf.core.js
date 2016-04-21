@@ -77,13 +77,30 @@
 					shaderProgram: 0,
 					vertexShader: 0,
 					fragmentShader: 0
-				};
+				},
+				extensions = {};
 
 			// map out shader types to enumerated webgl types, but only once
+			
 			shaderTypeMap = shaderTypeMap || {
 				'x-shader/x-vertex': gl.VERTEX_SHADER,
 				'x-shader/x-fragment': gl.FRAGMENT_SHADER
 			};
+
+			// extension "polyfills"
+
+			if (!gl.createVertexArray) {
+				// try to instantiate the OES WebGL extension for vertex array objects
+				var ext = extensions.OES_vertex_array_object = gl.getExtension('OES_vertex_array_object');
+
+				gl.VERTEX_ARRAY_BINDING = ext.VERTEX_ARRAY_BINDING_OES;
+				gl.createVertexArray = ext.createVertexArrayOES.bind(ext);
+				gl.deleteVertexArray = ext.deleteVertexArrayOES.bind(ext);
+				gl.bindVertexArray = ext.bindVertexArrayOES.bind(ext);
+				gl.isVertexArray = ext.isVertexArrayOES.bind(ext);
+			}
+
+			// construct context
 
 			context = {
 				get id() { return id; },
@@ -202,10 +219,10 @@
 						}
 					};
 
-					program.vertexShader = vertexShader;
-					program.fragmentShader = fragmentShader;
+					program.vertexShader = vert;
+					program.fragmentShader = frag;
 
-					if (vertexShader && fragmentShader) program.link();
+					if (vert && frag) program.link();
 
 					return program;
 				},
@@ -290,28 +307,36 @@
 				},
 				Mesh: function(options) {
 					var settings = {},
-						attributes = settings.attributes,
-						vertices = settings.vertices,
-						indices = settings.indices,
-						drawMode = gl[settings.mode],
+						attributes,
+						vertices,
+						indices,
+						drawMode,
 						i,
-						attr;
+						attr,
+						mesh;
 
-					_public.extend(settings, defaults.Mesh, options)
+					_public.extend(settings, defaults.Mesh, options);
+
+					attributes = settings.attributes;
+					vertices = settings.vertices;
+					indices = settings.indices;
+					drawMode = gl[settings.mode];
 
 					// safety checks are optional but recommended, especially for procedurally generated geometry
 
 					if (!settings.unsafe) {
-						if (attributes.length > vertices.length) throw new Error('GF.Context.Mesh construction error: attributes require ' + attributes.length + ' buffers, ' + vertices.length + ' provided');
+						if (attributes.length > vertices.length) throw new Error('GF.Context.Mesh construction error: attributes require ' + attributes.length + ' vertex buffers, ' + vertices.length + ' provided');
 
 						for (i = 0; attr = attributes[i]; ++i) {
 							if (vertices[i].length % attr.size !== 0) throw new RangeError('GF.Context.Mesh construction error: attribute "' + attr.name + '" requires ' + attr.size + ' vertex elements');
-							if (!((attr.type === gl.FLOAT && vertices[i] instanceof Float32Array) || (attr.type === gl.INT && vertices[i] instanceof Int32Array))) throw new TypeError('GF.Context.Mesh construction error: attribute "' + attr.name + '" type does not match type of buffer provided');
+							if (!((attr.type === 'FLOAT' && vertices[i] instanceof Float32Array) || (attr.type === 'INT' && vertices[i] instanceof Int32Array))) throw new TypeError('GF.Context.Mesh construction error: attribute "' + attr.name + '" type does not match type of buffer provided');
 						}
+
+						if (settings.indices instanceof Int32Array === false) throw new Error('GF.Context.Mesh construction error: indices array is undefined or of invalid type');
 					}
 
-					var id = gl.genVertexArrays(),
-						indicesId,
+					var id = gl.createVertexArray(),
+						indexId,
 						bufferIds = [];
 
 					// create vertex array id
@@ -321,26 +346,27 @@
 					// create and fill vertex buffers
 
 					for (i = 0; attr = attributes[i]; ++i) {
-						bufferIds[i] = gl.glGenBuffers();
+						bufferIds[i] = gl.createBuffer();
 
 						gl.bindBuffer(gl.ARRAY_BUFFER, bufferIds[i]);
 						gl.bufferData(gl.ARRAY_BUFFER, vertices[i], gl.STATIC_DRAW);
 
-						gl.vertexAttribPointer(gl.ARRAY_BUFFER, attr.size, gl[attr.type], false, 0, 0);
+						gl.enableVertexAttribArray(i);
+						gl.vertexAttribPointer(i, attr.size, gl[attr.type], false, attr.size * 4, 0);
 					}
 
 					// create and fill index buffer
 
-					indexId = gl.genBuffers();
-					gl.bindBuffer(gl.ARRAY_BUFFER, indexId);
+					indexId = gl.createBuffer();
 
 					gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexId);
 					gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 
 					// unbind
 
-					gl.bindVertexArray(0);
-					gl.bindBuffer(0);
+					gl.bindVertexArray(null);
+					gl.bindBuffer(gl.ARRAY_BUFFER, null);
+					gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
 					function draw() {
 						gl.bindVertexArray(id);
@@ -358,7 +384,7 @@
 						gl.bindVertexArray(0);
 					}
 
-					return buffer = {
+					return mesh = {
 						get attributes() { return attributes; },
 						get vertices() { return vertices; },
 						get indices() { return indices; },

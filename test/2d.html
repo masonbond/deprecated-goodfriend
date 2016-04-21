@@ -37,26 +37,27 @@ void main() {
 <script>
 
 var gf = new GF.Context(document.getElementById('view-canvas')),
-	texture = new gf.Texture('test.png');
+	texture = new gf.Texture('test.png'),
+	vertexAttributes = [
+		{
+			name: 'in_position',
+			type: 'FLOAT',
+			size: 4
+		}
+	];
 
-gf.shaderProgram = new gf.ShaderProgram(
-	new gf.Shader('test-vertex'),
-	new gf.Shader('test-fragment')
-);
+gf.shaderProgram = new gf.ShaderProgram({
+	attributes: vertexAttributes,
+	vertexShader: new gf.Shader('test-vertex'),
+	fragmentShader: new gf.Shader('test-fragment')
+});
 
 console.log(gf.shaderProgram.vertexShader.source);
 
-var vertexAttributes = [
-	{
-		name: 'in_position',
-		type: 'FLOAT',
-		size: 4
-	}
-];
-
 var mesh = new gf.Mesh({
 	attributes: vertexAttributes,
-	vertices:
+	vertices: [ new Float32Array([0, 0, 0, 0]) ],
+	indices: new Int32Array([0])
 });
 
 </script>
