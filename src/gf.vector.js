@@ -629,6 +629,7 @@
 		var size = initialSize || 64,
 			grow = growAmount || size,
 			pool = [],
+			top,
 			stack = [new Float32Array(16)],
 			operand = new Float32Array(16),
 			eyePos = new Float32Array(4),
@@ -649,7 +650,7 @@
 				expandPool(grow);
 			}
 
-			push();
+			return push();
 		}
 
 		function push() {
@@ -657,8 +658,10 @@
 
 			stack.push(top);
 
-			glCopyMat4(top, newTop);
+			gfCopyMat4(top, newTop);
 			top = newTop;
+
+			return _public;
 		}
 
 		function popSafe() {
@@ -680,22 +683,34 @@
 
 		function identity() {
 			gfIdentityMat4(top);
+
+			return _public;
 		}
 
 		function transform(m) {
 			gfMultiplyMat4(top, m, top);
+
+			return _public;
 		}
 
 		function translate(x, y, z) {
-			top[12] += x;
-			top[13] += y;
-			top[14] += z;
+			operand[12] = x;
+			operand[13] = y;
+			operand[14] = z;
+
+			gfMultiplyMat4(operand, top, top);
+
+			operand[12] = operand[13] = operand[14] = 0;
+
+			return _public;
 		}
 
 		function translateTo(x, y, z) {
 			top[12] = x;
 			top[13] = y;
 			top[14] = z;
+
+			return _public;
 		}
 
 		function scale(x, y, z) {
@@ -703,60 +718,74 @@
 			operand[5] = y;
 			operand[10] = z;
 
-			gfMultiplyMat4(top, operand, top);
+			gfMultiplyMat4(operand, top, top);
 
 			operand[0] = operand[5] = operand[10] = 1;
+
+			return _public;
 		}
 
 		function rotateX(a) {
-			var cos = Math.cos(a),
-				sin = Math.sin(a);
+			var radians = degreesToRadians * a,
+				cos = Math.cos(radians),
+				sin = Math.sin(radians);
 
 			operand[5] = operand[10] = cos;
 			operand[6] = -sin;
 			operand[9] = sin;
 
-			gfMultiplyMat4(top, operand, top);
+			gfMultiplyMat4(operand, top, top);
 
 			operand[5] = operand[10] = 1;
 			operand[6] = operand[9] = 0;
+
+			return _public;
 		}
 
 		function rotateY(a) {
-			var cos = Math.cos(a),
-				sin = Math.sin(a);
+			var radians = degreesToRadians * a,
+				cos = Math.cos(radians),
+				sin = Math.sin(radians);
 
 			operand[0] = operand[10] = cos;
 			operand[2] = sin;
 			operand[8] = -sin;
 
-			gfMultiplyMat4(top, operand, top);
+			gfMultiplyMat4(operand, top, top);
 
 			operand[0] = operand[10] = 1;
 			operand[2] = operand[8] = 0;
+
+			return _public;
 		}
 
 		function rotateZ(a) {
-			var cos = Math.cos(a),
-				sin = Math.sin(a);
+			var radians = degreesToRadians * a,
+				cos = Math.cos(radians),
+				sin = Math.sin(radians);
 
 			operand[0] = operand[5] = cos;
 			operand[1] = -sin;
 			operand[4] = sin;
 
-			gfMultiplyMat4(top, operand, top);
+			gfMultiplyMat4(operand, top, top);
 
 			operand[0] = operand[5] = 1;
-			operand[1] = operand[4] = 0;			
+			operand[1] = operand[4] = 0;
+
+			return _public;
 		}
 
-		function rotateZYX(x, y, z) {
-			var cx = Math.cos(x),
-				cy = Math.cos(y),
-				cz = Math.cos(z),
-				sx = Math.sin(x),
-				sy = Math.sin(y),
-				sz = Math.sin(z),
+		function rotateZYX(z, y, x) {
+			var xRadians = degreesToRadians * x,
+				yRadians = degreesToRadians * y,
+				zRadians = degreesToRadians * z,
+				cx = Math.cos(xRadians),
+				cy = Math.cos(yRadians),
+				cz = Math.cos(zRadians),
+				sx = Math.sin(xRadians),
+				sy = Math.sin(yRadians),
+				sz = Math.sin(zRadians),
 				cxsy = cx * sy;
 
 			operand[0] = cy * cz;
@@ -771,19 +800,25 @@
             operand[9] = cy * sx;
             operand[10] = cx * cy;
 
-            gfMultiplyMat4(top, operand, top);
+            gfMultiplyMat4(operand, top, top);
 
             operand[0] = operand[5] = operand[10] = 1;
             operand[1] = operand[2] = operand[4] = operand[6] = operand[8] = operand[9] = 0;
+
+			return _public;
 		}
 
-		function rotateYXZ(x, y, z) {
-			var cx = Math.cos(x),
-				cy = Math.cos(y),
-				cz = Math.cos(z),
-				sx = Math.sin(x),
-				sy = Math.sin(y),
-				sz = Math.sin(z),
+		function rotateYXZ(y, x, z) {
+			// TODO fix - y works, xz are broke
+			var xRadians = degreesToRadians * x,
+				yRadians = degreesToRadians * y,
+				zRadians = degreesToRadians * z,
+				cx = Math.cos(xRadians),
+				cy = Math.cos(yRadians),
+				cz = Math.cos(zRadians),
+				sx = Math.sin(xRadians),
+				sy = Math.sin(yRadians),
+				sz = Math.sin(zRadians),
 				cysx = cy * sx;
 
             operand[0] = cy * cz + sx * sy * sz;
@@ -798,15 +833,19 @@
             operand[9] = cysx * cz + sy * sz;
             operand[10] = cx * cy;
 
-            gfMultiplyMat4(top, operand, top);
+            gfMultiplyMat4(operand, top, top);
 
             operand[0] = operand[5] = operand[10] = 1;
             operand[1] = operand[2] = operand[4] = operand[6] = operand[8] = operand[9] = 0;
+
+			return _public;
 		}
 
 		function clearRotation() {
             operand[0] = operand[5] = operand[10] = 1;
-            operand[1] = operand[2] = operand[4] = operand[6] = operand[8] = operand[9] = 0;	
+            operand[1] = operand[2] = operand[4] = operand[6] = operand[8] = operand[9] = 0;
+
+			return _public;
 		}
 
 		function lookAt(target, up) {
@@ -843,57 +882,11 @@
 			top[2] = eyeDir[0];
 			top[6] = eyeDir[1];
 			top[10] = eyeDir[2];
+
+			return _public;
 		}
 
-		function createOrtho(x1, y1, x2, y2) {
-			var dx = x2 - x1,
-				dy = y2 - y1;
-
-			top[0] = 2 / dx;
-			top[5] = 2 / dy;
-			top[10] = top[15] = 1;
-			top[12] = -(x1 + x2) / dx;
-			top[13] = -(y1 + y2) / dy;
-
-			top[1] = top[2] = top[3] = top[4] = top[6] = 0;
-			top[7] = top[8] = top[9] = top[11] = top[14] = 0;
-		}
-
-		function createPerspectiveFromFOV(fov, aspect, near, far) {
-			var ys = 1 / Math.tan(degreesToRadians * fov / 2),
-				l = far - near;
-
-			top[0] = ys / aspect;
-			top[5] = ys;
-			top[10] = -far / l;
-			top[11] = -near * far / l;
-			top[14] = -1;
-
-			top[1] = top[2] = top[3] = top[4] = 0;
-			top[6] = top[7] = top[8] = top[9] = 0;
-			top[12] = top[13] = top[15] = 0;
-		}
-
-		function createPerspectiveFromBounds(top, bottom, left, right, near, far) {
-			var dx = right - left,
-				dy = top - bottom,
-				dz = far - near,
-				n2 = 2 * near;
-
-			top[0] = n2 / dx;
-			top[2] = (left + right) / dx;
-			top[5] = n2 / dy;
-			top[6] = (top + bottom) / dy;
-			top[10] = -(far + near) / l;
-			top[11] = -n2 * far / l;
-			top[14] = -1;
-
-			top[1] = top[3] = top[4] = 0;
-			top[7] = top[8] = top[9] = 0;
-			top[12] = top[13] = top[15] = 0;
-		}
-
-		gfIdentityMat4(stack[0]);
+		gfIdentityMat4(top = stack[0]);
 		gfIdentityMat4(operand);
 
 		expandPool(size);
@@ -915,11 +908,68 @@
 			rotateZYX: rotateZYX,
 			rotateYXZ: rotateYXZ,
 			clearRotation: clearRotation,
-			lookAt: lookAt,
-			createOrtho: createOrtho,
-			createPerspectiveFromFOV: createPerspectiveFromFOV,
-			createPerspectiveFromBounds: createPerspectiveFromBounds
+			lookAt: lookAt
 		};
 	};
+
+	// static MatrixStack methods 
+
+	GF.MatrixStack.createOrtho = function(x1, y1, x2, y2) {
+		var dx = x2 - x1,
+			dy = y2 - y1,
+			result = new Float32Array(16);
+
+		result[0] = 2 / dx;
+		result[5] = 2 / dy;
+		result[10] = result[15] = 1;
+		result[12] = x1 + x2 / -dx;
+		result[13] = y1 + y2 / -dy;
+
+		result[1] = result[2] = result[3] = result[4] = result[6] = 0;
+		result[7] = result[8] = result[9] = result[11] = result[14] = 0;
+
+		return result;
+	}
+
+	GF.MatrixStack.createPerspectiveFromFOV = function(fov, aspect, near, far) {
+		// TODO test near/far and
+		var ys = 1 / Math.tan(degreesToRadians * fov / 2),
+			l = far - near,
+			result = new Float32Array(16);
+
+		result[0] = -ys / aspect;
+		result[5] = ys;
+		result[10] = far / l;
+		result[11] = -near * far / l;
+		result[14] = 1;
+
+		result[1] = result[2] = result[3] = result[4] = 0;
+		result[6] = result[7] = result[8] = result[9] = 0;
+		result[12] = result[13] = result[15] = 0;
+		
+		return result;
+	}
+
+	GF.MatrixStack.createPerspectiveFromBounds = function(top, bottom, left, right, near, far) {
+		var dx = right - left,
+			dy = top - bottom,
+			dz = far - near,
+			n2 = 2 * near,
+			result = new Float32Array(16);
+
+		result[0] = n2 / dx;
+		result[2] = (left + right) / dx;
+		result[5] = n2 / dy;
+		result[6] = (top + bottom) / dy;
+		result[10] = -(far + near) / l;
+		result[11] = -n2 * far / l;
+		result[14] = -1;
+
+		result[1] = result[3] = result[4] = 0;
+		result[7] = result[8] = result[9] = 0;
+		result[12] = result[13] = result[15] = 0;
+
+		return result;
+	}
 
 }(window.GF));
