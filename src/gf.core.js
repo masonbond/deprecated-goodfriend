@@ -78,6 +78,7 @@
 					vertexShader: 0,
 					fragmentShader: 0
 				},
+				supportedExtensions = gl.getSupportedExtensions(),
 				extensions = {};
 
 			// map out shader types to enumerated webgl types, but only once
@@ -87,17 +88,33 @@
 				'x-shader/x-fragment': gl.FRAGMENT_SHADER
 			};
 
-			// extension "polyfills"
+			// load and alias WebGL extensions
 
-			if (!gl.createVertexArray) {
-				// try to instantiate the OES WebGL extension for vertex array objects
-				var ext = extensions.OES_vertex_array_object = gl.getExtension('OES_vertex_array_object');
+			var extensionPrefixes = [ '', 'WEBKIT_', 'MOZ_' ],
+				ext;
 
+			function getExtension(name) {
+				var result;
+
+				for (var i = 0, l = extensionPrefixes.length; i < l; ++i) {
+					if (result = gl.getExtension(extensionPrefixes[i] + name)) return extensions[name] = result;
+				}
+			}
+
+			// VAO support
+
+			if (!gl.createVertexArray && (ext = getExtension('OES_vertex_array_object'))) {
 				gl.VERTEX_ARRAY_BINDING = ext.VERTEX_ARRAY_BINDING_OES;
 				gl.createVertexArray = ext.createVertexArrayOES.bind(ext);
 				gl.deleteVertexArray = ext.deleteVertexArrayOES.bind(ext);
 				gl.bindVertexArray = ext.bindVertexArrayOES.bind(ext);
 				gl.isVertexArray = ext.isVertexArrayOES.bind(ext);
+			}
+
+			// MRT support
+
+			if (!gl.COLOR_ATTACHMENT0_WEBGL && (ext = getExtension('WEBGL_draw_buffers'))) {
+				// TODO
 			}
 
 			// construct context
@@ -178,13 +195,29 @@
 					return shader;
 				},
 				ShaderProgram: function(options) {
-					// create a shader program.
 					var settings = {},
 						object = gl.createProgram(),
 						vert = options.vertexShader,
 						frag = options.fragmentShader,
 						attributes = options.attributes,
 						program;
+
+					function uniform(isMatrix, name, value) {
+						var methodName,
+							isFloatArray = value instanceof Float32Array,
+							uniformLocation = gl.getUniformLocation(object, name);
+
+						if (isMatrix) {
+							methodName = 'uniformMatrix' + Math.floor(Math.sqrt(value.length)) + (isFloatArray ? 'fv' : 'iv');
+							gl[methodName](uniformLocation, false, value);
+						} else if (value instanceof Array) {
+							methodName = 'uniform' + value.length + (isFloatArray ? 'fv' : 'iv');
+							gl[methodName](uniformLocation, value);
+						} else {
+							methodName = 'uniform1' + (Number.isInteger(value) ? 'i' : 'f');
+							gl[methodName](uniformLocation, value);
+						}
+					}
 
 					program = {
 						get object() { return object; },
@@ -197,6 +230,9 @@
 
 						get attributes() { return attributes; },
 						set attributes(newAttributes) { return attributes = newAttributes; },
+
+						setUniform: uniform.bind(program, false),
+						setUniformMatrix: uniform.bind(program, true),
 
 						link: function() {
 							if (!(vert && vert.object && frag && frag.object)) return false;
@@ -232,15 +268,20 @@
 						id = gl.createTexture(),
 						texture,
 						width,
-						height;
+						height,
+						defaultColor = new Uint8Array([0, 0, 0, 0]);
 
-					_public.extend(settings, options || {}, defaults.Texture);
+					_public.extend(settings, defaults.Texture, options || {});
 					onLoad = settings.onLoad;
 
-					function fromElement(element, isImage) {
+					function update(s) {
 						bind();
-						gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, element);
+						gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, s);
 						gl.generateMipmap(gl.TEXTURE_2D);
+					}
+
+					function fromElement(element, isImage) {
+						update(element);
 
 						// images will have naturalWidth and Height defined
 
@@ -257,16 +298,14 @@
 
 						source = typeof source === 'string' && document.getElementById(source) || source;
 
-						var isImage;
-
 						if (typeof source === 'string') {
 							var image = new Image();
 
 							image.onload = function() { fromElement(image); };
 							image.src = source;
-						} else if ((isImage = source instanceof HTMLImageElement) || source instanceof HTMLCanvasElement) {
-							fromElement(source, isImage);
-						} else throw new TypeError('GF.Context.Texture - invalid source type');						
+						} else if (source instanceof HTMLImageElement || source instanceof HTMLCanvasElement) {
+							fromElement(source);
+						} else throw new TypeError('GF.Context.Texture - invalid source type');
 					}
 
 					function bind(unit) {
@@ -292,7 +331,14 @@
 						context.Texture.unbind();
 					}
 
+					bind();
+					gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, defaultColor);
+					gl.generateMipmap(gl.TEXTURE_2D);
+
 					load(textureSource);
+
+					wrap(settings.wrapU, settings.wrapV);
+					filter(settings.minFilter, settings.magFilter);
 
 					return texture = {
 						get id() { return id; },
@@ -332,7 +378,7 @@
 							if (!((attr.type === 'FLOAT' && vertices[i] instanceof Float32Array) || (attr.type === 'INT' && vertices[i] instanceof Int32Array))) throw new TypeError('GF.Context.Mesh construction error: attribute "' + attr.name + '" type does not match type of buffer provided');
 						}
 
-						if (settings.indices instanceof Int32Array === false) throw new Error('GF.Context.Mesh construction error: indices array is undefined or of invalid type');
+						if (settings.indices instanceof Uint16Array === false) throw new Error('GF.Context.Mesh construction error: indices array is undefined or of invalid type');
 					}
 
 					var id = gl.createVertexArray(),
@@ -376,12 +422,12 @@
 						for (i = 0; i < l; ++i) gl.enableVertexAttribArray(i);
 
 						gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexId);
-						gl.drawElements(drawMode, indices.length, gl.UNSIGNED_INT, 0);
-						gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+						gl.drawElements(drawMode, indices.length, gl.UNSIGNED_SHORT, 0);
+						gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
 						for (i = 0; i < l; ++i) gl.disableVertexAttribArray(i);
 
-						gl.bindVertexArray(0);
+						gl.bindVertexArray(null);
 					}
 
 					return mesh = {
